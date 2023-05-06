@@ -19,10 +19,11 @@
 
 #define ATEXIT(func) if(atexit(func) != 0){ fprintf(stderr, "cannot set exit function\n"); exit(EXIT_FAILURE); }
 
-#define LOCK(mtx) if ((errno = pthread_mutex_lock(&mtx)) != 0){ perror("Mutex lock: "); exit(EXIT_FAILURE); }
-#define UNLOCK(mtx) if ((errno = pthread_mutex_unlock(&mtx)) != 0){ perror("Mutex unlock: "); exit(EXIT_FAILURE); }
-#define WAIT(c, m) if ((errno = pthread_cond_wait(&c, &m)) != 0) { perror("Cond wait: "); exit(EXIT_FAILURE); }
-#define SIGNAL(c) if ((errno = pthread_cond_signal(&c)) != 0) { perror("Cond signal: "); exit(EXIT_FAILURE); }
+#define LOCK(mtx) if ((errno = pthread_mutex_lock(&mtx)) != 0){ perror("Mutex lock"); exit(EXIT_FAILURE); }
+#define UNLOCK(mtx) if ((errno = pthread_mutex_unlock(&mtx)) != 0){ perror("Mutex unlock"); exit(EXIT_FAILURE); }
+#define WAIT(c, m) if ((errno = pthread_cond_wait(&c, &m)) != 0) { perror("Cond wait"); exit(EXIT_FAILURE); }
+#define SIGNAL(c) if ((errno = pthread_cond_signal(&c)) != 0) { perror("Cond signal"); exit(EXIT_FAILURE); }
+#define BROADCAST(c) if((errno = pthread_cond_broadcast(&c)) != 0) { perror("Cond broadcast"); exit(EXIT_FAILURE); }
 
 #define UNIX_PATH_MAX 108
 

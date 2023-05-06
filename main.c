@@ -11,7 +11,7 @@
 #include "tree.h"
 
 #define HELP fprintf(stderr, "Usage: %s <fileBinario> [<fileBinario> [<fileBinario>]] [-n <nthread>] [-q <qlen>] [-d <directory-name>] [-t <delay>]\n", argv[0]);
-#define NUMBER_OPTION(x, str) trad = isNumber(optarg); if(trad != -1) { if(trad > 0) { x = trad; } else { fprintf(stderr, "Argomento opzione minore o uguale a zero non valido.\n"); exit(EXIT_FAILURE); } } else { fprintf(stderr, str); exit(EXIT_FAILURE); }
+#define NUMBER_OPTION(x, str) trad = isNumber(optarg); if(trad != -1) { if(trad > 0) { x = trad; } else { fprintf(stderr, "Argomento opzione minore o uguale a zero non valido.\n"); exit(EXIT_FAILURE); } } else { perror(str); exit(EXIT_FAILURE); }
 #define SETTED_OPTION(c) fprintf(stderr, "Opzione %s già settata\n", c); 
 
 extern int terminaCodaFlag;
@@ -124,6 +124,7 @@ int main(int argc, char * argv[]){
         ignoraSegnali();
         creaSocketServer();
         fprintf(stderr, "Fine crea socket server\n");
+        ATEXIT(dealloca)
 
         //provo la socket
         int msgDim;
@@ -135,8 +136,8 @@ int main(int argc, char * argv[]){
             }
             fprintf(stderr, "%d\t%s\n", msgDim, buffer);
         }while(msgDim >= 0);
-        
-        ATEXIT(dealloca)
+
+        stampaAlbero();
     }
     else{
         //padre -> masterWoker
@@ -159,6 +160,7 @@ int main(int argc, char * argv[]){
             do{
                 CHECK_EQ((w = writen(socketClient, argv[i], msgDim)), -1, "writen")
             }while(w == 1);
+            //manca solo long
             sleep(1);
             i++;
         }

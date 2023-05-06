@@ -1,0 +1,362 @@
+ES7 BOUNDEDQUEUE
+
+typedef struct BQueue {
+    void   **buf;
+    size_t   head;
+    size_t   tail;
+    size_t   qsize;
+    size_t   qlen;
+    pthread_mutex_t  m;
+    pthread_cond_t   cfull;
+    pthread_cond_t   cempty;
+} BQueue_t;
+
+BQueue_t *initBQueue(size_t n) {
+    BQueue_t *q = (BQueue_t*)calloc(sizeof(BQueue_t), 1);
+    if (!q) { perror("malloc"); return NULL;}
+    q->buf = calloc(sizeof(void*), n);
+    if (!q->buf) {
+	perror("malloc buf");
+	goto error;
+    }
+    if (pthread_mutex_init(&q->m,NULL) != 0) {
+	perror("pthread_mutex_init");
+	goto error;
+    }
+    if (pthread_cond_init(&q->cfull,NULL) != 0) {
+	perror("pthread_cond_init full");
+	goto error;
+    }
+    if (pthread_cond_init(&q->cempty,NULL) != 0) {
+	perror("pthread_cond_init empty");
+	goto error;
+    }
+    q->head  = q->tail = 0;
+    q->qlen  = 0;
+    q->qsize = n;
+    return q;
+ error:
+    if (!q) return NULL; 
+    int myerrno = errno;
+    if (q->buf) free(q->buf);
+    if (&q->m) pthread_mutex_destroy(&q->m);
+    if (&q->cfull) pthread_cond_destroy(&q->cfull);
+    if (&q->cempty) pthread_cond_destroy(&q->cempty);
+    free(q);
+    errno = myerrno;
+    return NULL;
+}
+
+void deleteBQueue(BQueue_t *q, void (*F)(void*)) {
+    if (!q) {
+	errno = EINVAL;
+	return;
+    }   
+    if (F) {
+	void *data=NULL;
+	while((data = pop(q))) F(data);
+    }
+    if (q->buf) free(q->buf);
+    if (&q->m) pthread_mutex_destroy(&q->m);
+    if (&q->cfull) pthread_cond_destroy(&q->cfull);
+    if (&q->cempty) pthread_cond_destroy(&q->cempty);
+    free(q);
+}
+
+int push(BQueue_t *q, void *data) {
+    if (!q || !data) {
+	errno = EINVAL;
+	return -1;
+    }
+    LockQueue(q);
+    while (q->qlen == q->qsize) WaitToProduce(q);
+    //assert si accerta che la condizione che ha provocato l'uscita dal ciclo while sia ancora vera
+    //ma perché non dovrebbe essere più vera se sono dentro la lock??
+    assert(q->buf[q->tail] == NULL); 
+    q->buf[q->tail] = data;
+    q->tail += (q->tail+1 >= q->qsize) ? (1-q->qsize) : 1;
+    q->qlen += 1;
+    /* Invece di fare sempre la signal, si puo' contare il n. di 
+     * consumer in attesa e fare la signal solo se tale numero 
+     * e' > 0
+     */
+    SignalConsumer(q);   
+    UnlockQueue(q);
+    return 0;
+}
+
+void *pop(BQueue_t *q) {
+    if (!q) {
+	errno = EINVAL;
+	return NULL;
+    }
+    LockQueue(q);
+    while(q->qlen == 0) WaitToConsume(q);
+    void *data = q->buf[q->head];
+    q->buf[q->head] = NULL;
+    q->head += (q->head+1 >= q->qsize) ? (1-q->qsize) : 1;
+    q->qlen   -= 1;
+    //stesso discorso di prima...
+    assert(q->qlen>=0);
+    /* Invece di fare sempre la signal, si puo' contare il n. di 
+     * producer in attesa e fare la signal solo se tale numero 
+     * e' > 0
+     */
+    SignalProducer(q);
+    UnlockQueue(q);
+    return data;
+} 
+
+
+ES8 QUEUE
+
+/** Elemento della coda.
+ *
+ */
+typedef struct Node {
+    void        * data;
+    struct Node * next;
+} Node_t;
+
+/** Struttura dati coda.
+ *
+ */
+typedef struct Queue {
+    Node_t        *head;    // elemento di testa
+    Node_t        *tail;    // elemento di coda 
+    unsigned long  qlen;    // lunghezza 
+    pthread_mutex_t qlock;
+    pthread_cond_t  qcond;
+} Queue_t;
+
+Queue_t *initQueue() {
+    Queue_t *q = allocQueue();
+    if (!q) return NULL;
+    q->head = allocNode();
+    if (!q->head) return NULL;
+    q->head->data = NULL; 
+    q->head->next = NULL;
+    q->tail = q->head;    
+    q->qlen = 0;
+    if (pthread_mutex_init(&q->qlock, NULL) != 0) {
+	perror("mutex init");
+	return NULL;
+    }
+    if (pthread_cond_init(&q->qcond, NULL) != 0) {
+	perror("mutex cond");
+	if (&q->qlock) pthread_mutex_destroy(&q->qlock);
+	return NULL;
+    }    
+    return q;
+}
+
+void deleteQueue(Queue_t *q) {
+    while(q->head != q->tail) {
+	Node_t *p = (Node_t*)q->head;
+	q->head = q->head->next;
+	freeNode(p);
+    }
+    if (q->head) freeNode((void*)q->head);
+    if (&q->qlock)  pthread_mutex_destroy(&q->qlock);
+    if (&q->qcond)  pthread_cond_destroy(&q->qcond);
+    free(q);
+}
+
+int push(Queue_t *q, void *data) {
+    if ((q == NULL) || (data == NULL)) { errno= EINVAL; return -1;}
+    Node_t *n = allocNode();
+    if (!n) return -1;
+    n->data = data; 
+    n->next = NULL;
+
+    LockQueue(q);
+    q->tail->next = n;
+    q->tail       = n;
+    q->qlen      += 1;
+    UnlockQueueAndSignal(q);
+    return 0;
+}
+
+void *pop(Queue_t *q) {        
+    if (q == NULL) { errno= EINVAL; return NULL;}
+    LockQueue(q);
+    while(q->head == q->tail) {
+	UnlockQueueAndWait(q);
+    }
+    // locked
+    assert(q->head->next);
+    Node_t *n  = (Node_t *)q->head;
+    void *data = (q->head->next)->data;
+    q->head    = q->head->next;
+    q->qlen   -= 1;
+    assert(q->qlen>=0);
+    UnlockQueue(q);
+    freeNode(n);
+    return data;
+} 
+
+
+ES11 THREADPOOL
+
+/**
+ *  @struct threadpool
+ *  @brief Rappresentazione dell'oggetto threadpool
+ */
+typedef struct threadpool_t {
+    pthread_mutex_t  lock;    // mutua esclusione nell'accesso all'oggetto
+    pthread_cond_t   cond;    // usata per notificare un worker thread 
+    pthread_t      * threads; // array di worker id
+    int numthreads;           // numero di thread (size dell'array threads)
+    taskfun_t *pending_queue; // coda interna per task pendenti
+    int queue_size;           // massima size della coda, puo' essere anche -1 ad indicare che non si vogliono gestire task pendenti
+    int taskonthefly;         // numero di task attualmente in esecuzione 
+    int head, tail;           // riferimenti della coda
+    int count;                // numero di task nella coda dei task pendenti
+    int exiting;              // se > 0 e' iniziato il protocollo di uscita, se 1 il thread aspetta che non ci siano piu' lavori in coda
+} threadpool_t;
+
+static void *workerpool_thread(void *threadpool) {    
+    threadpool_t *pool = (threadpool_t *)threadpool; // cast
+    taskfun_t task;  // generic task
+    pthread_t self = pthread_self();
+    int myid = -1;
+
+    // non efficiente, si puo' fare meglio.....
+    //OVVIO CHE NON È EFFICIENTE DIO PORCO FAI UN FOR IN UN DO WHILE
+    do {
+        for (int i=0;i<pool->numthreads;++i)
+            if (pthread_equal(pool->threads[i], self)) {
+                myid = i;
+                break;
+            }
+    } while (myid < 0);
+
+    LOCK_RETURN(&(pool->lock), NULL);
+    for (;;) {
+
+        // in attesa di un messaggio, controllo spurious wakeups.
+        while((pool->count == 0) && (!pool->exiting)) {
+            pthread_cond_wait(&(pool->cond), &(pool->lock));
+	    }
+
+        if (pool->exiting > 1) break; // exit forzato, esco immediatamente
+        // devo uscire ma ci sono messaggi pendenti 
+        if (pool->exiting == 1 && !pool->count) break;  
+
+	    // nuovo task
+        task.fun = pool->pending_queue[pool->head].fun;
+        task.arg = pool->pending_queue[pool->head].arg;
+
+        pool->head++; pool->count--;
+        pool->head = (pool->head == abs(pool->queue_size)) ? 0 : pool->head;
+
+	    pool->taskonthefly++;
+        UNLOCK_RETURN(&(pool->lock), NULL);
+
+        // eseguo la funzione 
+        (*(task.fun))(task.arg);
+	
+        LOCK_RETURN(&(pool->lock), NULL);
+        pool->taskonthefly--;
+    }
+    UNLOCK_RETURN(&(pool->lock), NULL);
+
+    fprintf(stderr, "thread %d exiting\n", myid);
+    return NULL;
+}
+
+//DA USARE
+//libera risorse pool allocate dinamicamente, non i threads veri e propri
+static int freePoolResources(threadpool_t *pool) {
+    if(pool->threads) {
+        free(pool->threads);
+        free(pool->pending_queue);
+	
+        pthread_mutex_destroy(&(pool->lock));
+        pthread_cond_destroy(&(pool->cond));
+    }
+    free(pool);    
+    return 0;
+}
+
+threadpool_t *createThreadPool(int numthreads, int pending_size) {
+    //questo controllo io lo faccio già quando leggo gli argomenti
+    if(numthreads <= 0 || pending_size < 0) {
+	errno = EINVAL;
+        return NULL;
+    }
+    
+    threadpool_t *pool = (threadpool_t *)malloc(sizeof(threadpool_t));
+    if (pool == NULL) return NULL;
+
+    //inizializzazione
+    pool->numthreads   = 0;
+    pool->taskonthefly = 0;
+    pool->queue_size = (pending_size == 0 ? -1 : pending_size);
+    pool->head = pool->tail = pool->count = 0;
+    pool->exiting = 0;
+
+    /* Allocate thread and task queue */
+    pool->threads = (pthread_t *)malloc(sizeof(pthread_t) * numthreads);
+    if (pool->threads == NULL) {
+	free(pool);
+	return NULL;
+    }
+    pool->pending_queue = (taskfun_t *)malloc(sizeof(taskfun_t) * abs(pool->queue_size));
+    if (pool->pending_queue == NULL) {
+	free(pool->threads);
+	free(pool);
+	return NULL;
+    }
+    //CARINO
+    if ((pthread_mutex_init(&(pool->lock), NULL) != 0) ||
+	(pthread_cond_init(&(pool->cond), NULL) != 0))  {
+	free(pool->threads);
+	free(pool->pending_queue);
+	free(pool);
+	return NULL;
+    }
+    for(int i = 0; i < numthreads; i++) {
+        if(pthread_create(&(pool->threads[i]), NULL,
+                          workerpool_thread, (void*)pool) != 0) {
+	    /* errore fatale, libero tutto forzando l'uscita dei threads */
+        //la forzo mettendo il flag a più di uno
+            destroyThreadPool(pool, 1);
+	    errno = EFAULT;
+            return NULL;
+        }
+        pool->numthreads++;
+    }
+    return pool;
+}
+
+
+int destroyThreadPool(threadpool_t *pool, int force) {    
+    if(pool == NULL || force < 0) {
+	errno = EINVAL;
+	return -1;
+    }
+
+    LOCK_RETURN(&(pool->lock), -1);
+
+    pool->exiting = 1 + force;
+
+    if (pthread_cond_broadcast(&(pool->cond)) != 0) {
+      UNLOCK_RETURN(&(pool->lock),-1);
+      errno = EFAULT;
+      return -1;
+    }
+    UNLOCK_RETURN(&(pool->lock), -1);
+
+    for(int i = 0; i < pool->numthreads; i++) {
+	if (pthread_join(pool->threads[i], NULL) != 0) {
+	    errno = EFAULT;
+	    UNLOCK_RETURN(&(pool->lock),-1);
+	    return -1;
+	}
+    }
+    freePoolResources(pool);
+    return 0;
+}
+
+

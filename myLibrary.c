@@ -22,6 +22,7 @@ int isNumber(const char* s) {
         }
         return val; 
     }
+    errno = EINVAL;
     return -1;
 }
 
