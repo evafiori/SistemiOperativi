@@ -46,10 +46,7 @@ void* gestoreSegnali(void* mask){
                 pthread_exit(NULL);
             case SIGUSR1:
                 stampaFlag = 1;
-                //CONTROLLARE I MESSAGGI IN CODA E POI
-                //FARE UNA BROADCAST PER SVEGLIARE I THREAD IN ATTESA
                 //prendere direttamente la lock sulla socket e mandare messaggio di stampa
-                //oppure delegare gestione flag ai worker e al master
                 break;
             // ignoro SIGPIPE per evitare di essere terminato da una scrittura su un socket
             //quindi SIGPIPE non fa parte della maschera

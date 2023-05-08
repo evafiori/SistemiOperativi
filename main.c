@@ -7,6 +7,7 @@
 
 #include "myLibrary.h"
 #include "master.h"
+#include "threadpool.h"
 #include "collector.h"
 #include "tree.h"
 
@@ -147,7 +148,11 @@ int main(int argc, char * argv[]){
         creaSocketClient();
         fprintf(stderr, "Fine crea socket client\n");
 
-        //provo la socket
+        BQueue_t* pool = NULL;
+        pool = createThreadPool (nWorker, dimCoda);
+
+        //provo la socket 
+        /*
         int i = 0;
         int msgDim;
         int w;
@@ -168,6 +173,7 @@ int main(int argc, char * argv[]){
         do{
             CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen")
         }while(w == 1);
+        */
 
         //creaWorkerSet(nWorker, dimCoda);
         //metti in coda : richieste
