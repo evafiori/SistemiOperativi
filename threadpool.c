@@ -6,6 +6,8 @@
 
 extern int terminaCodaFlag;
 
+BQueue_t *pool = NULL;
+
 //pop: la chiamata deve avvenire in possesso della LOCK
 char* pop(BQueue_t *q){
     if(q == NULL){
@@ -20,8 +22,26 @@ char* pop(BQueue_t *q){
     return data;
 }
 
-//push
+//push:la chiamata deve avvenire in possesso della LOCK
+int push(BQueue_t *q, char* data){
+    if (q == NULL || data == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    q->queue[q->tail] = data;
+    q->tail = (q->tail+1) % q->qsize;
+    q->qlen++;
 
+    return 0;
+}
+
+void *worker_thread(void *threadpool){
+    fprintf(stderr, "Sono un thread!\n");
+
+    return NULL;
+}
+
+/*
 void *worker_thread(void *threadpool) {    
     BQueue_t *pool = (BQueue_t *)threadpool; // cast
     char* path = NULL;
@@ -55,6 +75,7 @@ void *worker_thread(void *threadpool) {
 
     return NULL;
 }
+*/
 
 //ritorna -1 con errno settato in caso di errore
 //0 se tutto okay
@@ -106,10 +127,11 @@ int freePoolResources(BQueue_t *pool) {
     // arriva un segnale di terminazione
     // finisco i messaggi da mettere in coda 
 //ritorna -1 in caso di errore con errno settato
-int destroyThreadPool(BQueue_t *pool) {    
+void destroyThreadPool() {    
     if(pool == NULL) {
         errno = EINVAL;
-        return -1;
+        perror("destryThreadPool");
+        return ;
     }
 
     //la lock mi serve solo per accedere alla condition variable
@@ -119,29 +141,33 @@ int destroyThreadPool(BQueue_t *pool) {
     if (pthread_cond_broadcast(&(pool->cempty)) != 0) { 
       UNLOCK(pool->m);
       errno = EFAULT;
-      return -1;
+      perror("destryThreadPool");
+      return;
     }
+
     UNLOCK(pool->m)
 
     for(int i = 0; i < pool->numthreads; i++) {
-	if (pthread_join(pool->threads[i], NULL) != 0) {
-	    errno = EFAULT;
-	    UNLOCK(pool->m)
-	    return -1;
-	}
+        if (pthread_join(pool->threads[i], NULL) != 0) {
+            errno = EFAULT;
+            perror("destryThreadPool");
+            return;
+        }
     }
-    //freePoolResources(pool); la devo chiamare a prescindere, non necessariamente qua
-    return 0;
+
+    if(freePoolResources(pool) == -1){
+        perror("freePoolResources");
+    }
+    
 }
 
-BQueue_t *createThreadPool(int num, int size) {
+int createThreadPool(int num, int size) {
     //questo controllo io lo faccio già quando leggo gli argomenti
     if(num <= 0 || size < 0) {
 	    errno = EINVAL;
-        return NULL;
+        return -1;
     }
     
-    BQueue_t *pool;
     CHECK_NULL((pool = (BQueue_t *) malloc(sizeof(BQueue_t))), "malloc pool")
     
     //inizializzazione
@@ -157,14 +183,14 @@ BQueue_t *createThreadPool(int num, int size) {
     if (pool->threads == NULL) {
         //error: ENOMEM
         free(pool);
-        return NULL;
+        return -1;
     }
     pool->queue = (char**) malloc(sizeof(char*) * size);
     if (pool->queue == NULL) {
         //error: ENOMEM
         free(pool->threads);
         free(pool);
-        return NULL;
+        return -1;
     }
     else{
         for(int i = 0; i < pool->qsize; i++){
@@ -179,7 +205,7 @@ BQueue_t *createThreadPool(int num, int size) {
         if((errno = pthread_mutex_destroy(&(pool->m))) != 0){
             perror("destroy mutex");
         }
-        return NULL;
+        return -1;
     }
     if((errno = pthread_cond_init(&(pool->cfull), NULL) != 0)){
         free(pool->threads);
@@ -188,7 +214,7 @@ BQueue_t *createThreadPool(int num, int size) {
         if((errno = pthread_cond_destroy(&(pool->cfull))) != 0){
             perror("destroy cond cfull");
         }
-        return NULL;
+        return -1;
     } 
     if((errno = pthread_cond_init(&(pool->cempty), NULL)) != 0){
         free(pool->threads);
@@ -197,20 +223,23 @@ BQueue_t *createThreadPool(int num, int size) {
         if((errno = pthread_cond_destroy(&(pool->cempty))) != 0){
             perror("destroy cond cempty");
         }
-        return NULL;
+        return -1;
     }
     for(int i = 0; i < num; i++) {
         if((errno = pthread_create(&(pool->threads[i]), NULL, worker_thread, (void*)pool)) != 0) {
 	    /* errore fatale, libero tutto forzando l'uscita dei threads */
         //la forzo mettendo il flag a più di uno
             terminaCodaFlag = 1;
-            destroyThreadPool(pool);
+            destroyThreadPool();
 	        errno = EFAULT;
-            return NULL;
+            return -1;
         }
         pool->numthreads++;
     }
-    return pool;
+
+    ATEXIT(destroyThreadPool)
+
+    return 0;
 }
 //dopo questo^ definire correttamente destroy... MA NON POTREI VOLER LAVORARE CON I THREAD CHE SONO RIUSCITA A CREARE??
 

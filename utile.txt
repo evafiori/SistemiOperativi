@@ -382,4 +382,4 @@ typedef struct BQueue {
     //protocollo di uscita fuori dal threadpool perché di interesse anche del master
 } BQueue_t;
 
-
+ps aux | grep prova

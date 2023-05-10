@@ -36,6 +36,7 @@ void chiudiSocketServer(){
 
 //cancella il file farm.sck creato
 void cancellaFileSocket(){
+    printf("unlink chiamata corretamente\n");
     unlink(SOCKNAME);
 }
 
@@ -63,6 +64,7 @@ void creaSocketServer(){
     
     CHECK_EQ((fdc = accept(socketServer, NULL, 0)), -1, "Accept: ")
     ATEXIT(chiudiConnessione)
+    printf("conn accettata\n");
 }
 
 /*

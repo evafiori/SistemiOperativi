@@ -28,5 +28,5 @@ typedef struct BQueue {
 void *worker_thread(void *threadpool);
 
 int freePoolResources(BQueue_t *pool);
-int destroyThreadPool(BQueue_t *pool);
-BQueue_t *createThreadPool(int num, int size);
+void destroyThreadPool();
+int createThreadPool(int num, int size);

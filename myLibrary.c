@@ -142,8 +142,10 @@ int myConnect(int sockfd, const struct sockaddr *addr, socklen_t addrlen){
     request.tv_nsec = 50000;
     request.tv_sec = 0;
   
+    //sleep(1); potrei dover aspettare la creazione del server per non avere problemi
     while((errno = 0), (connect(sockfd, addr, addrlen)) < 0){
-        if(errno == ENOENT){ //il socket non esiste
+        //il socket non esiste OR la richiesta non può essere risolta subito
+        if(errno == ENOENT || errno == EAGAIN){ 
             nanosleep(&request, NULL);//aspetto un momentino
             //non controllo il valore di ritorno perché non mi interessa se è stata interrotta, mi basta sia passato un pochino di tempo
         }
@@ -154,3 +156,20 @@ int myConnect(int sockfd, const struct sockaddr *addr, socklen_t addrlen){
     }
     return 0;
 }
+
+/*
+EINPROGRESS
+              The socket is nonblocking and the connection cannot be
+              completed immediately.  (UNIX domain sockets failed with
+              EAGAIN instead.)  It is possible to select(2) or poll(2)
+              for completion by selecting the socket for writing.  After
+              select(2) indicates writability, use getsockopt(2) to read
+              the SO_ERROR option at level SOL_SOCKET to determine
+              whether connect() completed successfully (SO_ERROR is
+              zero) or unsuccessfully (SO_ERROR is one of the usual
+              error codes listed here, explaining the reason for the
+              failure).
+
+       EINTR  The system call was interrupted by a signal that was
+              caught; see signal(7).
+*/
