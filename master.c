@@ -23,9 +23,10 @@ int socketClient;
 pthread_mutex_t mtxSocket = PTHREAD_MUTEX_INITIALIZER;
 
 //fa terminare il thread gestore e libera la memoria tramite la join
+//SEMBRA FUNZIONARE MA: PERCHÉ? SE IL GESTORE FA LA EXIT SENZA KILL? LA KILL COME SI COMPORTA? POTREI SFRUTTARE IL FLAG?
 void killGestoreSegnali() {
     fprintf(stderr, "id gestore segnali: %ld\n", idGestoreSegnali);
-    CHECK_NEQ((errno = pthread_kill(idGestoreSegnali, SIGTERM)), 0, "pthread_kill") //SIGTERM è gestito: aziona terminaCoda e fa exit()
+    CHECK_NEQ((errno = pthread_kill(idGestoreSegnali, SIGTERM)), 0, "pthread_kill") //sigterm è gestito: aziona terminaCoda e fa exit()
     fprintf(stderr, "La kill e' stata eseguita\n");
     CHECK_NEQ((errno = pthread_join(idGestoreSegnali, NULL)), 0, "join gestore segnali") 
     fprintf(stderr, "La join è stata eseguita\n");
@@ -34,13 +35,11 @@ void killGestoreSegnali() {
 //thread che cattura tutti i segnali e li gestisce adeguatamente
 void* gestoreSegnali(void* mask){
     int sig;
-    
-   fprintf(stderr, "gestore star\n");
-    CHECK_NEQ((errno = pthread_sigmask(SIG_UNBLOCK, (sigset_t *) &mask, NULL)), 0, "pthread_sigmask: ")
-    
+
+    fprintf(stderr, "gestore star\n");
+
     while(1){ 
-        
-        CHECK_NEQ((errno = sigwait(&mask, &sig)), 0, "sigwait: ")
+        CHECK_NEQ((errno = sigwait((sigset_t*) mask, &sig)), 0, "sigwait: ")
         fprintf(stderr, "sblocato\n");
         switch(sig){
             case SIGHUP:
@@ -68,7 +67,6 @@ void* gestoreSegnali(void* mask){
 //maschera i segnali a tutti i thread e chiama un thread gestore apposta
 void mascheraSegnali(){
     sigset_t mask;
-    sigset_t old;
     struct sigaction s;
 
     //aggiungo i segnali alla maschera
@@ -83,20 +81,18 @@ void mascheraSegnali(){
     //CHECK_EQ(sigaddset(&mask, SIGPIPE), -1, "SIGPIPE") //maschero anche la pipe o SIG_IGN?
 
     //blocco segnali della maschera a tutti gli altri thread
-    CHECK_NEQ((errno = pthread_sigmask(SIG_BLOCK, &mask, &old)), 0, "pthread_sigmask: ")
-    //int sig;
-    //CHECK_NEQ((errno = sigwait(&mask, &sig)), 0, "sigwait: ")
-    //fprintf(stdout, "sblockk\n");  
+    CHECK_NEQ((errno = pthread_sigmask(SIG_BLOCK, &mask, NULL)), 0, "pthread_sigmask: ")
+    
     // ignoro SIGPIPE per evitare di essere terminato da una scrittura su un socket
-    //memset(&s, 0, sizeof(s)); 
-    //s.sa_handler = SIG_IGN;
-    //CHECK_EQ(sigaction(SIGPIPE, &s, NULL), -1, "sigaction")
+    memset(&s, 0, sizeof(s)); 
+    s.sa_handler = SIG_IGN;
+    CHECK_EQ(sigaction(SIGPIPE, &s, NULL), -1, "sigaction")
 
     //creo thread gestore dei segnali
-    CHECK_NEQ((errno = pthread_create(&idGestoreSegnali, NULL, gestoreSegnali, NULL)), 0, "Thread create: ")
+    CHECK_NEQ((errno = pthread_create(&idGestoreSegnali, NULL, gestoreSegnali, (void*) &mask)), 0, "Thread create: ")
     //IL THREAD È CREATO QUANDO LO DECIDE IL SO
     
-    //ATEXIT(killGestoreSegnali)
+    ATEXIT(killGestoreSegnali)
 }
 
 
@@ -111,10 +107,10 @@ void creaSocketClient(){
     struct sockaddr_un sa;
     
     CHECK_EQ((socketClient = socket(AF_UNIX, SOCK_STREAM, 0)), -1, "Socket: ")
+    ATEXIT(chiudiSocketClient)
 
     strncpy(sa.sun_path, SOCKNAME, UNIX_PATH_MAX);
     sa.sun_family = AF_UNIX;
 
     CHECK_EQ(myConnect(socketClient, (struct sockaddr *) &sa, sizeof(sa)), -1, "Connessione fallita: ")
-    ATEXIT(chiudiSocketClient)
 }

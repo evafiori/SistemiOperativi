@@ -60,11 +60,11 @@ void creaSocketServer(){
     ATEXIT(cancellaFileSocket)
 
     CHECK_EQ(listen(socketServer, 1), -1, "Listen: ")
-    //accetto una sola connessione, uso la accept (che può essere interrota da EINVAL)
     
+    // accept può essere interrota da EINVAL
     CHECK_EQ((fdc = accept(socketServer, NULL, 0)), -1, "Accept: ")
     ATEXIT(chiudiConnessione)
-    printf("conn accettata\n");
+    printf("conn accettata e chiusura in atexit\n");
 }
 
 /*

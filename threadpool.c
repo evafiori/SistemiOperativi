@@ -153,6 +153,7 @@ void destroyThreadPool() {
             perror("destryThreadPool");
             return;
         }
+        fprintf(stderr, "joinato thread %d\n", i);
     }
 
     if(freePoolResources(pool) == -1){
@@ -172,7 +173,7 @@ int createThreadPool(int num, int size) {
     
     //inizializzazione
     pool->numthreads   = 0;
-    pool->taskonthefly = 0;
+    //pool->taskonthefly = 0;
     pool->qsize = size;
     pool->qlen = 0;
     pool->head = 0;
@@ -192,13 +193,18 @@ int createThreadPool(int num, int size) {
         free(pool);
         return -1;
     }
-    else{
-        for(int i = 0; i < pool->qsize; i++){
-            pool->queue[i] = NULL;
-        }
+    
+    for(int i = 0; i < pool->qsize; i++){
+        pool->queue[i] = NULL;
     }
     
     if ((errno = pthread_mutex_init(&(pool->m), NULL)) != 0){
+        free(pool->threads);
+        free(pool->queue);
+        free(pool);
+        return -1;
+    }
+    if((errno = pthread_cond_init(&(pool->cfull), NULL) != 0)){
         free(pool->threads);
         free(pool->queue);
         free(pool);
@@ -206,22 +212,16 @@ int createThreadPool(int num, int size) {
             perror("destroy mutex");
         }
         return -1;
-    }
-    if((errno = pthread_cond_init(&(pool->cfull), NULL) != 0)){
-        free(pool->threads);
-        free(pool->queue);
-        free(pool);
-        if((errno = pthread_cond_destroy(&(pool->cfull))) != 0){
-            perror("destroy cond cfull");
-        }
-        return -1;
     } 
     if((errno = pthread_cond_init(&(pool->cempty), NULL)) != 0){
         free(pool->threads);
         free(pool->queue);
         free(pool);
-        if((errno = pthread_cond_destroy(&(pool->cempty))) != 0){
-            perror("destroy cond cempty");
+        if((errno = pthread_mutex_destroy(&(pool->m))) != 0){
+            perror("destroy mutex");
+        }
+        if((errno = pthread_cond_destroy(&(pool->cfull))) != 0){
+            perror("destroy cond cfull");
         }
         return -1;
     }
@@ -241,5 +241,5 @@ int createThreadPool(int num, int size) {
 
     return 0;
 }
-//dopo questo^ definire correttamente destroy... MA NON POTREI VOLER LAVORARE CON I THREAD CHE SONO RIUSCITA A CREARE??
+//POTREI VOLER LAVORARE CON I THREAD CHE SONO RIUSCITA A CREARE??
 

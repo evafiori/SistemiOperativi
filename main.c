@@ -122,12 +122,14 @@ int main(int argc, char * argv[]){
     if(pid == 0){
         //figlio -> collector
         fprintf(stderr, "Sono il collector\n");
+
         ignoraSegnali();
+
         creaSocketServer();
         fprintf(stderr, "Fine crea socket server\n");
+        
         ATEXIT(dealloca)
 
-        
         //provo la socket
         int msgDim;
         char buffer[PATHNAME_MAX_DIM];
@@ -138,23 +140,23 @@ int main(int argc, char * argv[]){
             }
             fprintf(stderr, "%d\t%s\n", msgDim, buffer);
         }while(msgDim >= 0);
-        
 
         stampaAlbero();
     }
     else{
         //padre -> masterWoker
         fprintf(stderr, "Sono il master\n");
+
         //gestione segnali
         mascheraSegnali();
 
-        //creo il threadpool prima di creare la connessione
-        CHECK_EQ(createThreadPool (nWorker, dimCoda), -1, "createThreadPool")
+        //manca la creazione threadpool
+
+        
+       CHECK_EQ(createThreadPool (nWorker, dimCoda), -1, "Creazione threadpool") 
 
         creaSocketClient();
         fprintf(stderr, "Fine crea socket client\n");
-
-        
 
         //provo la socket 
         
@@ -162,8 +164,6 @@ int main(int argc, char * argv[]){
         int msgDim;
         int w;
         while(terminaCodaFlag != 1 && i < argc){
-            fprintf(stderr, "Sto scrivedo\n");
-            sleep(5);
             CHECK_EQ((msgDim = myStrnlen(argv[i], PATHNAME_MAX_DIM)), -1, "myStrnlen")
             msgDim++; //'\0'
             do{
@@ -186,10 +186,7 @@ int main(int argc, char * argv[]){
         //metti in coda : richieste
         //tutti i file sono in coda
         // => attiva stato di uscita
-        printf("qui\n");
         CHECK_EQ((waitpid(pid, NULL, 0)), -1, "waitpid: ")
-        printf("quiiiiiiiiiiiiiiiiiiiiiiiiiiii\n");
-
     }
 
     return 0;
