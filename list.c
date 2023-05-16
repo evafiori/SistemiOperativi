@@ -24,6 +24,7 @@ lPtr inserisciTesta (lPtr e, char* f){
     CHECK_NULL(temp, "malloc")
     CHECK_NULL((temp->file = malloc(sizeof(char)*(lung+1))), "malloc") //+1 per il terminatore di stringa
     strncpy(temp->file, f, lung);
+    
     temp->next = e;
     return temp;
 }

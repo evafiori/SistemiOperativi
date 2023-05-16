@@ -71,6 +71,11 @@ void mascheraSegnali(){
     sigset_t mask;
     struct sigaction s;
 
+    memset(&s, 0, sizeof(s)); 
+    // ignoro SIGPIPE per evitare di essere terminato da una scrittura su un socket
+    s.sa_handler = SIG_IGN;
+    CHECK_EQ(sigaction(SIGPIPE, &s, NULL), -1, "sigaction")
+
     //aggiungo i segnali alla maschera
     CHECK_EQ(sigemptyset(&mask), -1, "sigemptyset: ") 
     CHECK_EQ(sigaddset(&mask, SIGHUP), -1, "SIGHUP")
@@ -78,18 +83,10 @@ void mascheraSegnali(){
     CHECK_EQ(sigaddset(&mask, SIGQUIT), -1, "SIGQUIT")
     CHECK_EQ(sigaddset(&mask, SIGTERM), -1, "SIGTERM")
     CHECK_EQ(sigaddset(&mask, SIGUSR1), -1, "SIGUSR1")
-    //potrei mascherare anche SIGPIPE
-    //LA MASCHERA È EREDITATA DOPO LA FORK
-    //CHECK_EQ(sigaddset(&mask, SIGPIPE), -1, "SIGPIPE") //maschero anche la pipe o SIG_IGN?
-
+    
     //blocco segnali della maschera a tutti gli altri thread
     CHECK_NEQ((errno = pthread_sigmask(SIG_BLOCK, &mask, NULL)), 0, "pthread_sigmask: ")
     
-    // ignoro SIGPIPE per evitare di essere terminato da una scrittura su un socket
-    memset(&s, 0, sizeof(s)); 
-    s.sa_handler = SIG_IGN;
-    CHECK_EQ(sigaction(SIGPIPE, &s, NULL), -1, "sigaction")
-
     //creo thread gestore dei segnali
     CHECK_NEQ((errno = pthread_create(&idGestoreSegnali, NULL, gestoreSegnali, (void*) &mask)), 0, "Thread create: ")
     //IL THREAD È CREATO QUANDO LO DECIDE IL SO

@@ -1,9 +1,10 @@
-//professore per lei mi prostituirei
+#define _POSIX_C_SOURCE 200809
 
 // #define _POSIX_C_SOURCE 200112L //necessaria intanto per fare la getopt
 #include <errno.h>
+#include <stdlib.h>
 #include <unistd.h>
-#include <getopt.h> //anche se la getopt è definita in unistd.h
+//#include <getopt.h> //anche se la getopt è definita in unistd.h
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -18,7 +19,7 @@
 #define HELP fprintf(stderr, "Usage: %s <fileBinario> [<fileBinario> [<fileBinario>]] [-n <nthread>] [-q <qlen>] [-d <directory-name>] [-t <delay>]\n", argv[0]);
 //trad > 0 controlla anche != -1
 #define NUMBER_OPTION(x, str) trad = isNumber(optarg); if(trad != -1) { if(trad > 0) { x = trad; } else { fprintf(stderr, "Argomento opzione minore o uguale a zero non valido.\n"); exit(EXIT_FAILURE); } } else { perror(str); exit(EXIT_FAILURE); }
-#define SETTED_OPTION(c) fprintf(stderr, "Opzione %s già settata\n", c); 
+#define SETTED_OPTION(c) fprintf(stderr, "Opzione %c già settata\n", c); 
 
 extern int terminaCodaFlag;
 extern int stampaFlag;
@@ -33,6 +34,8 @@ extern BQueue_t *pool;
 lPtr fileBinari = NULL;
 
 int pthread_kill(pthread_t thread, int sig); //altrimenti warning
+
+void svuotaFileBinari();
 
 int main(int argc, char * argv[]){
     if(argc <= 2){
@@ -56,48 +59,52 @@ int main(int argc, char * argv[]){
     int trad = 1;
     opterr = 0; //variabile impostata !=0 x default, se zero getopt non stampa messaggi di errore ma lascia fare al chiamante
 
+    ATEXIT(svuotaFileBinari) //li deallocherà sia per il master che per il collector
+
     while((c = getopt(argc, argv, ":n:q:d:t:")) != -1 || optind < argc){
         //Per impostazione predefinita, getopt () permuta il contenuto di argv durante la scansione,
         //in modo che alla fine tutte le non opzioni siano alla fine. MA NON LO FA... :( => optind nella condizione del while
-        if(c == -1){
+
+        if ( c == -1){
             //non è stato rilevato un argomento opzionale, quindi assumo che l'input sia un file, dovrei fare una coda con i file letti in input
             if(verificaReg(argv[optind])){
                 fileBinari = inserisciTesta(fileBinari, argv[optind]);
-                fprintf(stderr, "Inserito file in lista\n");
             }
             else{
                 fprintf(stderr, "File %s non regolare.\n", argv[optind]);
             }
             optind++;
+            fprintf(stderr, "%d\n", optind);
+
         }
         else{
             switch(c){
                 case 'n': //numero dei thread worker
-                    if(setWorker == 0){
+                    if(!setWorker){
                         NUMBER_OPTION(nWorker, "-n: argomento non valido\n")
                         setWorker = 1;
                     }
                     else{
-                        SETTED_OPTION("n")
+                        SETTED_OPTION('n')
                         HELP
                         exit(EXIT_FAILURE);
                     }
                     break;
                 case 'q': //lunghezza della coda concorrente
-                    if(setCoda == 0){
+                    if(!setCoda){
                         NUMBER_OPTION(dimCoda, "-q: argomento non valido\n")
                         setCoda = 1;
                     }
                     else{
-                        SETTED_OPTION("q")
+                        SETTED_OPTION('q')
                         HELP
                         exit(EXIT_FAILURE);
                     }
                     break;
                 case 'd': //directory contenti file binari
-                    if(setDir == 0){
+                    if(!setDir){
                         dir = optarg; //controllo idDir
-                        if(verificaDir(dir) == -1){
+                        if(!verificaDir(dir)){
                             fprintf(stderr, "Directory specificata non valida.\n");
                             dir = NULL;
                         }
@@ -106,33 +113,30 @@ int main(int argc, char * argv[]){
                         }
                     }
                     else{
-                        SETTED_OPTION("d")
+                        SETTED_OPTION('d')
                         HELP
                         exit(EXIT_FAILURE);
                     }
                     break;
                 case 't':  //delay tra richieste successive ai thread worker
-                    if(setDelay == 0){
+                    if(!setDelay){
                         NUMBER_OPTION(delay, "-t: argomento non valido\n")
                         setDelay = 1;
                     }
                     else{
-                        SETTED_OPTION("t")
+                        SETTED_OPTION('t')
                         HELP
                         exit(EXIT_FAILURE);
                     }
                     break;
-                case ':':
-                    fprintf(stderr, "-%c: argomento mancante.\n", (char)c);
-                    HELP
                 case '?':
                     fprintf(stderr, "-%c: opzione non valida.\n", (char)c);
                     HELP
-
             }
         }
     }
     fprintf(stderr, "Worker: %d\tCoda: %d\tDirectory: %s\tDelay: %d\n", nWorker, dimCoda, dir, delay);
+    
     //adesso devo controllare di aver ricevuto qualche file in input:
     //se scannerizzo la directory dopo aver lanciato i thread controllo anche se è stata passata una dir da scan
     if(fileBinari == NULL && setDir == 0){ 
@@ -141,8 +145,8 @@ int main(int argc, char * argv[]){
         exit(EXIT_FAILURE);
     }
 
+    //verifico e va
     stampaLista(fileBinari);
-
 
     /*
     for(int i = 0; i < lenFileReg; i++){
@@ -156,19 +160,16 @@ int main(int argc, char * argv[]){
     }
     */
     
-    //prova gestore segnali OK
+    //prova gestore segnali NON QUI
     /*
         while (terminaCodaFlag != 1);
     */
-    
-    
-    //controllare se file o directory sono stati passati come argomenti
 
     //prova segnali: funziona
     //while(terminaCodaFlag == 0);
 
     
-    CHECK_EQ((pid = fork()), -1, "Fork: ")
+    CHECK_EQ((pid = fork()), -1, "Fork")
     if(pid == 0){
         //figlio -> collector
         fprintf(stderr, "Sono il collector\n");
@@ -201,7 +202,7 @@ int main(int argc, char * argv[]){
         fprintf(stderr, "Sono il master\n");
 
         //gestione segnali
-        //mascheraSegnali();
+        mascheraSegnali();
 
         //manca la creazione threadpool
 
@@ -277,4 +278,8 @@ int main(int argc, char * argv[]){
     }
 
     return 0;
+}
+
+void svuotaFileBinari(){
+    fileBinari = svuotaLista(&fileBinari);
 }

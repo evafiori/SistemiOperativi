@@ -12,6 +12,8 @@
 
 extern int socketServer;
 
+int nanosleep(const struct timespec *req, struct timespec *rem);
+
 //ritorna il valore intero oppure -1 con errno settato
 int isNumber(const char* s) {
     char* e = NULL;
@@ -91,7 +93,7 @@ int myStrncat(char* s1, char* s2, size_t max){
 */
 int readn (int fd, void* buf, size_t n){
 	size_t  nleft = n, nread;
-	void* bufbuf = buf;
+	char* bufbuf = buf;
 	while(nleft > 0){
 		if((nread = read(fd, bufbuf, nleft)) == -1 && errno != EINTR) {
 			return -1;
@@ -117,7 +119,7 @@ int readn (int fd, void* buf, size_t n){
 // -1 => errore, errno settato. 1 => nessun byte scritto. 0 => okay
 int writen (int fd, void* buf, size_t n){
 	size_t   nleft = n, nwrite;
-	void* bufbuf = (char*)buf;
+	char* bufbuf = (char*)buf;
    	while (nleft > 0) {
    		if((nwrite = write(fd, bufbuf, nleft)) == -1 && errno != EINTR) {
 	   		//if(nleft == n){
