@@ -35,16 +35,47 @@ int push(BQueue_t *q, char* data){
     return 0;
 }
 
-void *worker_thread(void *threadpool){
+long risultato(char * p){
+    FILE * fileInput = NULL;
+    long sum = 0, i = 0, x;
+
+    if((fileInput = fopen(p, "rb")) == NULL){
+        //errno settato dalla fopen, gestione al chiamante
+        return -1;
+    }
+
+    while(fread(&x, sizeof(long), 1, fileInput) == 1){ 
+        //calcoli
+        //printf("%ld += %ld * %ld\n", sum, i, x);
+        sum += i*x;
+        i++;
+    }
+
+    if(ferror(fileInput)){
+        //fprintf(stderr, "Lettura terminata a causa di un errore.\n");
+        errno = EIO;
+        fclose(fileInput);
+        return -1;
+    }
+
+    fclose(fileInput);
+    printf("%ld\t%s\n", sum, p);
+
+    return sum;
+}
+
+/*void *worker_thread(void *threadpool){
     fprintf(stderr, "Sono un thread!\n");
 
     return NULL;
-}
+}*/
 
-/*
 void *worker_thread(void *threadpool) {    
+    fprintf(stderr, "Sono un thread!\n");
+
     BQueue_t *pool = (BQueue_t *)threadpool; // cast
     char* path = NULL;
+    long ris;
 
     LOCK(pool->m)
     while(terminaCodaFlag == 0 || pool->qlen > 0) {
@@ -56,26 +87,34 @@ void *worker_thread(void *threadpool) {
 
         if (terminaCodaFlag == 1 && pool->qlen == 0) {
             // devo uscire e non ci sono task in coda
+            //è stata fatta una broadcast dal master
             UNLOCK(pool->m)
             return NULL;
         }
         
 	    // nuovo task
-        // data = pop
+        CHECK_NULL((path = pop(pool)), "pop")
     
-        //UNLOCK(pool->m)
+        //faccio la signal al master 
+        SIGNAL(pool->cfull)
+
+        UNLOCK(pool->m)
 
         // eseguo la funzione 
+        CHECK_EQ((ris = risultato(path)), -1, "risultato")
         // invio il risultato
+
+        //free(path);
+        path = NULL;
 	
-        //LOCK(pool->m)
+        LOCK(pool->m)
        
     }
     UNLOCK(pool->m)
 
     return NULL;
 }
-*/
+
 
 //ritorna -1 con errno settato in caso di errore
 //0 se tutto okay
@@ -137,7 +176,7 @@ void destroyThreadPool() {
     //la lock mi serve solo per accedere alla condition variable
     LOCK(pool->m)
 
-    //cempty è la cond sui cui mi restano in attesa i worker (thread)
+    //c è la cond sui cui mi restano in attesa i worker (thread)
     if (pthread_cond_broadcast(&(pool->cempty)) != 0) { 
       UNLOCK(pool->m);
       errno = EFAULT;
@@ -225,6 +264,7 @@ int createThreadPool(int num, int size) {
         }
         return -1;
     }
+    
     for(int i = 0; i < num; i++) {
         if((errno = pthread_create(&(pool->threads[i]), NULL, worker_thread, (void*)pool)) != 0) {
 	    /* errore fatale, libero tutto forzando l'uscita dei threads */

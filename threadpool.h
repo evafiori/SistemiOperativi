@@ -17,13 +17,16 @@ typedef struct BQueue {
     pthread_mutex_t  m;
     pthread_cond_t   cfull;
     pthread_cond_t   cempty;
-
     pthread_t      * threads; // array di worker id
     int numthreads;           // numero di thread (size dell'array threads)
     int taskonthefly;         // numero di task attualmente in esecuzione 
     //^non so se davvero mi interessa
     //protocollo di uscita fuori dal threadpool perché di interesse anche del master
 } BQueue_t;
+
+char* pop(BQueue_t *q);
+int push(BQueue_t *q, char* data);
+long risultato(char * p);
 
 void *worker_thread(void *threadpool);
 

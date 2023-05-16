@@ -18,6 +18,7 @@ int terminaCodaFlag = 0;
 int stampaFlag = 0;
 
 pthread_t idGestoreSegnali = -1;
+
 int socketClient;
 
 pthread_mutex_t mtxSocket = PTHREAD_MUTEX_INITIALIZER;
@@ -92,7 +93,7 @@ void mascheraSegnali(){
     CHECK_NEQ((errno = pthread_create(&idGestoreSegnali, NULL, gestoreSegnali, (void*) &mask)), 0, "Thread create: ")
     //IL THREAD È CREATO QUANDO LO DECIDE IL SO
     
-    ATEXIT(killGestoreSegnali)
+    //ATEXIT(killGestoreSegnali)
 }
 
 

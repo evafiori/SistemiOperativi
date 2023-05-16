@@ -4,6 +4,7 @@
 #include <getopt.h> //anche se la getopt è definita in unistd.h
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 #include "myLibrary.h"
 #include "master.h"
@@ -18,8 +19,14 @@
 extern int terminaCodaFlag;
 extern int stampaFlag;
 
+extern pthread_t idGestoreSegnali; 
+
 extern int socketClient;
 extern int fdc;
+
+extern BQueue_t *pool;
+
+int pthread_kill(pthread_t thread, int sig); //altrimenti warning
 
 int main(int argc, char * argv[]){
     if(argc == 1){
@@ -123,7 +130,7 @@ int main(int argc, char * argv[]){
         //figlio -> collector
         fprintf(stderr, "Sono il collector\n");
 
-        ignoraSegnali();
+        //ignoraSegnali();
 
         creaSocketServer();
         fprintf(stderr, "Fine crea socket server\n");
@@ -131,7 +138,7 @@ int main(int argc, char * argv[]){
         ATEXIT(dealloca)
 
         //provo la socket
-        int msgDim;
+        /*int msgDim;
         char buffer[PATHNAME_MAX_DIM];
         do{
             CHECK_EQ((readn(fdc, &msgDim, sizeof(int))), -1, "readn1")
@@ -140,6 +147,7 @@ int main(int argc, char * argv[]){
             }
             fprintf(stderr, "%d\t%s\n", msgDim, buffer);
         }while(msgDim >= 0);
+        */
 
         stampaAlbero();
     }
@@ -148,39 +156,71 @@ int main(int argc, char * argv[]){
         fprintf(stderr, "Sono il master\n");
 
         //gestione segnali
-        mascheraSegnali();
+        //mascheraSegnali();
 
         //manca la creazione threadpool
 
         
-       CHECK_EQ(createThreadPool (nWorker, dimCoda), -1, "Creazione threadpool") 
+        CHECK_EQ(createThreadPool (nWorker, dimCoda), -1, "Creazione threadpool") 
 
         creaSocketClient();
         fprintf(stderr, "Fine crea socket client\n");
 
         //provo la socket 
         
-        int i = 0;
+        int i = 1;
         int msgDim;
         int w;
         while(terminaCodaFlag != 1 && i < argc){
             CHECK_EQ((msgDim = myStrnlen(argv[i], PATHNAME_MAX_DIM)), -1, "myStrnlen")
+
+            LOCK(pool->m)
+
+            //se la coda è piena aspetto
+            while(pool->qlen == pool->qsize && terminaCodaFlag != 1){
+                WAIT(pool->cfull, pool->m)
+            }
+            
+            if(terminaCodaFlag != 1){
+                CHECK_EQ(push(pool, argv[i]), -1, "pop")
+            }
+
+            SIGNAL(pool->cempty)
+
+            UNLOCK(pool->m)
+
             msgDim++; //'\0'
+            /*
             do{
                 CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen")
             }while(w == 1);
             do{
                 CHECK_EQ((w = writen(socketClient, argv[i], msgDim)), -1, "writen")
             }while(w == 1);
+            */
+
             //manca solo long
             sleep(1);
             i++;
         }
+        /*if(i == argc && terminaCodaFlag != 1){
+            //terminaCodaFlag = 1; //dovrebbe farlo il signal handler
+            fprintf(stderr, "id gestore segnali: %ld\n", idGestoreSegnali);
+            CHECK_NEQ((errno = pthread_kill(idGestoreSegnali, SIGTERM)), 0, "pthread_kill") //sigterm è gestito: aziona terminaCoda e fa exit()
+            fprintf(stderr, "La kill e' stata eseguita\n");
+        }*/
+        terminaCodaFlag = 1;//da mettere se commentato if sopra
+        BROADCAST(pool->cempty)
         msgDim = -1;
+        /*
         do{
             CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen")
         }while(w == 1);
+        */
         
+
+        //CHECK_NEQ((errno = pthread_join(idGestoreSegnali, NULL)), 0, "join gestore segnali") 
+        //fprintf(stderr, "La join è stata eseguita\n");
 
         //creaWorkerSet(nWorker, dimCoda);
         //metti in coda : richieste
