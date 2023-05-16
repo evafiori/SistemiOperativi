@@ -1,4 +1,5 @@
-#define _POSIX_C_SOURCE 200112L //motivare versione nella relazione
+//#define _POSIX_C_SOURCE 200112L //motivare versione nella relazione
+#define _POSIX_C_SOURCE 200809
 //#define _GNU_SOURCE
 
 #include <stdio.h>

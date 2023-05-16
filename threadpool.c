@@ -8,6 +8,9 @@ extern int terminaCodaFlag;
 
 BQueue_t *pool = NULL;
 
+extern int socketClient;
+extern pthread_mutex_t mtxSocket;
+
 //pop: la chiamata deve avvenire in possesso della LOCK
 char* pop(BQueue_t *q){
     if(q == NULL){
@@ -59,7 +62,7 @@ long risultato(char * p){
     }
 
     fclose(fileInput);
-    printf("%ld\t%s\n", sum, p);
+    printf("risultato: %ld\t%s\n", sum, p);
 
     return sum;
 }
@@ -76,6 +79,8 @@ void *worker_thread(void *threadpool) {
     BQueue_t *pool = (BQueue_t *)threadpool; // cast
     char* path = NULL;
     long ris;
+    int msgDim;
+    int w;
 
     LOCK(pool->m)
     while(terminaCodaFlag == 0 || pool->qlen > 0) {
@@ -87,9 +92,10 @@ void *worker_thread(void *threadpool) {
 
         if (terminaCodaFlag == 1 && pool->qlen == 0) {
             // devo uscire e non ci sono task in coda
-            //è stata fatta una broadcast dal master
+            //è stata fatta una broadcast dal master (o dal signal handler)
+            SIGNAL(pool->cfull)
             UNLOCK(pool->m)
-            return NULL;
+            return NULL; //pthread exit
         }
         
 	    // nuovo task
@@ -102,11 +108,31 @@ void *worker_thread(void *threadpool) {
 
         // eseguo la funzione 
         CHECK_EQ((ris = risultato(path)), -1, "risultato")
+
         // invio il risultato
+        //scrittura sulla socket
+
+        CHECK_EQ((msgDim = myStrnlen(path, PATHNAME_MAX_DIM)), -1, "myStrnlen")
+        msgDim++; //'\0'
+
+        LOCK(mtxSocket)
+
+        do{
+            CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen")
+        }while(w == 1);
+        do{
+            CHECK_EQ((w = writen(socketClient, path, msgDim)), -1, "writen")
+        }while(w == 1);
+        do{
+            CHECK_EQ((w = writen(socketClient, &ris, sizeof(long))), -1, "writen")
+        }while(w == 1);
+
+        UNLOCK(mtxSocket)
+        
 
         //free(path);
         path = NULL;
-	
+
         LOCK(pool->m)
        
     }

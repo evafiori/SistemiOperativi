@@ -1,3 +1,5 @@
+//professore per lei mi prostituirei
+
 // #define _POSIX_C_SOURCE 200112L //necessaria intanto per fare la getopt
 #include <errno.h>
 #include <unistd.h>
@@ -11,8 +13,10 @@
 #include "threadpool.h"
 #include "collector.h"
 #include "tree.h"
+#include "list.h"
 
 #define HELP fprintf(stderr, "Usage: %s <fileBinario> [<fileBinario> [<fileBinario>]] [-n <nthread>] [-q <qlen>] [-d <directory-name>] [-t <delay>]\n", argv[0]);
+//trad > 0 controlla anche != -1
 #define NUMBER_OPTION(x, str) trad = isNumber(optarg); if(trad != -1) { if(trad > 0) { x = trad; } else { fprintf(stderr, "Argomento opzione minore o uguale a zero non valido.\n"); exit(EXIT_FAILURE); } } else { perror(str); exit(EXIT_FAILURE); }
 #define SETTED_OPTION(c) fprintf(stderr, "Opzione %s già settata\n", c); 
 
@@ -26,15 +30,23 @@ extern int fdc;
 
 extern BQueue_t *pool;
 
+lPtr fileBinari = NULL;
+
 int pthread_kill(pthread_t thread, int sig); //altrimenti warning
 
 int main(int argc, char * argv[]){
-    if(argc == 1){
+    if(argc <= 2){
         HELP
-        exit(EXIT_FAILURE);
+        return 0;
     }
 
     pid_t pid;
+    
+    /*
+    char** fileRegolari = NULL;
+    int lenFileReg = 0;
+    CHECK_NULL((fileRegolari = malloc(sizeof(char*) * (argc-2))), "malloc"); //-2 per togliere nome eseguibile e terminatore NULL
+    */
     
     int nWorker = 4, dimCoda = 8, delay = 0;
     char* dir = NULL;
@@ -44,75 +56,106 @@ int main(int argc, char * argv[]){
     int trad = 1;
     opterr = 0; //variabile impostata !=0 x default, se zero getopt non stampa messaggi di errore ma lascia fare al chiamante
 
-    while((c = getopt(argc, argv, ":n:q:d:t:")) != -1){
+    while((c = getopt(argc, argv, ":n:q:d:t:")) != -1 || optind < argc){
         //Per impostazione predefinita, getopt () permuta il contenuto di argv durante la scansione,
-        //in modo che alla fine tutte le non opzioni siano alla fine. 
-        switch(c){
-            case 'n': //numero dei thread worker
-                if(setWorker == 0){
-                    NUMBER_OPTION(nWorker, "-n: argomento non valido\n")
-                    setWorker = 1;
-                }
-                else{
-                    SETTED_OPTION("n")
-                    HELP
-                    exit(EXIT_FAILURE);
-                }
-                break;
-            case 'q': //lunghezza della coda concorrente
-                if(setCoda == 0){
-                    NUMBER_OPTION(dimCoda, "-q: argomento non valido\n")
-                    setCoda = 1;
-                }
-                else{
-                    SETTED_OPTION("q")
-                    HELP
-                    exit(EXIT_FAILURE);
-                }
-                break;
-            case 'd': //directory contenti file binari
-                if(setDir == 0){
-                    dir = optarg; //controllo idDir
-                    if(verificaDir(dir) == -1){
-                        fprintf(stderr, "Directory specificata non valida.\n");
-                        dir = NULL;
+        //in modo che alla fine tutte le non opzioni siano alla fine. MA NON LO FA... :( => optind nella condizione del while
+        if(c == -1){
+            //non è stato rilevato un argomento opzionale, quindi assumo che l'input sia un file, dovrei fare una coda con i file letti in input
+            if(verificaReg(argv[optind])){
+                fileBinari = inserisciTesta(fileBinari, argv[optind]);
+                fprintf(stderr, "Inserito file in lista\n");
+            }
+            else{
+                fprintf(stderr, "File %s non regolare.\n", argv[optind]);
+            }
+            optind++;
+        }
+        else{
+            switch(c){
+                case 'n': //numero dei thread worker
+                    if(setWorker == 0){
+                        NUMBER_OPTION(nWorker, "-n: argomento non valido\n")
+                        setWorker = 1;
                     }
                     else{
-                        setDir = 1;
+                        SETTED_OPTION("n")
+                        HELP
+                        exit(EXIT_FAILURE);
                     }
-                }
-                else{
-                    SETTED_OPTION("d")
+                    break;
+                case 'q': //lunghezza della coda concorrente
+                    if(setCoda == 0){
+                        NUMBER_OPTION(dimCoda, "-q: argomento non valido\n")
+                        setCoda = 1;
+                    }
+                    else{
+                        SETTED_OPTION("q")
+                        HELP
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
+                case 'd': //directory contenti file binari
+                    if(setDir == 0){
+                        dir = optarg; //controllo idDir
+                        if(verificaDir(dir) == -1){
+                            fprintf(stderr, "Directory specificata non valida.\n");
+                            dir = NULL;
+                        }
+                        else{
+                            setDir = 1;
+                        }
+                    }
+                    else{
+                        SETTED_OPTION("d")
+                        HELP
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
+                case 't':  //delay tra richieste successive ai thread worker
+                    if(setDelay == 0){
+                        NUMBER_OPTION(delay, "-t: argomento non valido\n")
+                        setDelay = 1;
+                    }
+                    else{
+                        SETTED_OPTION("t")
+                        HELP
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
+                case ':':
+                    fprintf(stderr, "-%c: argomento mancante.\n", (char)c);
                     HELP
-                    exit(EXIT_FAILURE);
-                }
-                break;
-            case 't':  //delay tra richieste successive ai thread worker
-                if(setDelay == 0){
-                    NUMBER_OPTION(delay, "-t: argomento non valido\n")
-                    setDelay = 1;
-                }
-                else{
-                    SETTED_OPTION("t")
+                case '?':
+                    fprintf(stderr, "-%c: opzione non valida.\n", (char)c);
                     HELP
-                    exit(EXIT_FAILURE);
-                }
-                break;
-            case ':':
-                fprintf(stderr, "-%c: argomento mancante.\n", (char)c);
-                HELP
-            case '?':
-                fprintf(stderr, "-%c: opzione non valida.\n", (char)c);
-                HELP
 
+            }
         }
-        
     }
-    fprintf(stderr, "Worker: %d\nCoda: %d\nDirectory: %s\nDelay: %d\n", nWorker, dimCoda, dir, delay);
+    fprintf(stderr, "Worker: %d\tCoda: %d\tDirectory: %s\tDelay: %d\n", nWorker, dimCoda, dir, delay);
+    //adesso devo controllare di aver ricevuto qualche file in input:
+    //se scannerizzo la directory dopo aver lanciato i thread controllo anche se è stata passata una dir da scan
+    if(fileBinari == NULL && setDir == 0){ 
+        fprintf(stderr, "Nessun file o directory passati come argomento.\n");
+        HELP
+        exit(EXIT_FAILURE);
+    }
+
+    stampaLista(fileBinari);
+
+
+    /*
+    for(int i = 0; i < lenFileReg; i++){
+        printf("%s\n", fileRegolari[i]);
+    }
+    */
+    
+    /*
     while(optind < argc){
         printf("%s\n", argv[optind++]);
     }
-
+    */
+    
     //prova gestore segnali OK
     /*
         while (terminaCodaFlag != 1);
@@ -138,17 +181,19 @@ int main(int argc, char * argv[]){
         ATEXIT(dealloca)
 
         //provo la socket
-        /*int msgDim;
+        int msgDim;
+        long r = 0;
         char buffer[PATHNAME_MAX_DIM];
         do{
             CHECK_EQ((readn(fdc, &msgDim, sizeof(int))), -1, "readn1")
             if(msgDim > 0){
                 CHECK_EQ((readn(fdc, buffer, msgDim)), -1, "readn2")
-            }
-            fprintf(stderr, "%d\t%s\n", msgDim, buffer);
-        }while(msgDim >= 0);
-        */
+                CHECK_EQ((readn(fdc, &r, sizeof(long))), -1, "readn3")
 
+                fprintf(stderr, "%d\t%s\t%ld\n", msgDim, buffer, r);
+            }
+        }while(msgDim >= 0);
+        
         stampaAlbero();
     }
     else{
@@ -172,7 +217,7 @@ int main(int argc, char * argv[]){
         int msgDim;
         int w;
         while(terminaCodaFlag != 1 && i < argc){
-            CHECK_EQ((msgDim = myStrnlen(argv[i], PATHNAME_MAX_DIM)), -1, "myStrnlen")
+            
 
             LOCK(pool->m)
 
@@ -183,49 +228,51 @@ int main(int argc, char * argv[]){
             
             if(terminaCodaFlag != 1){
                 CHECK_EQ(push(pool, argv[i]), -1, "pop")
+                SIGNAL(pool->cempty)
             }
-
-            SIGNAL(pool->cempty)
 
             UNLOCK(pool->m)
 
-            msgDim++; //'\0'
+            
             /*
+            CHECK_EQ((msgDim = myStrnlen(argv[i], PATHNAME_MAX_DIM)), -1, "myStrnlen")
+            msgDim++; //'\0'
             do{
                 CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen")
             }while(w == 1);
             do{
                 CHECK_EQ((w = writen(socketClient, argv[i], msgDim)), -1, "writen")
             }while(w == 1);
-            */
-
             //manca solo long
-            sleep(1);
+            */
+            //sleep(1);
+
             i++;
         }
+
         /*if(i == argc && terminaCodaFlag != 1){
             //terminaCodaFlag = 1; //dovrebbe farlo il signal handler
             fprintf(stderr, "id gestore segnali: %ld\n", idGestoreSegnali);
             CHECK_NEQ((errno = pthread_kill(idGestoreSegnali, SIGTERM)), 0, "pthread_kill") //sigterm è gestito: aziona terminaCoda e fa exit()
             fprintf(stderr, "La kill e' stata eseguita\n");
         }*/
+
+        LOCK(pool->m)
+
         terminaCodaFlag = 1;//da mettere se commentato if sopra
         BROADCAST(pool->cempty)
+
+        UNLOCK(pool->m)
+
         msgDim = -1;
-        /*
+        
         do{
             CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen")
         }while(w == 1);
-        */
         
-
         //CHECK_NEQ((errno = pthread_join(idGestoreSegnali, NULL)), 0, "join gestore segnali") 
         //fprintf(stderr, "La join è stata eseguita\n");
 
-        //creaWorkerSet(nWorker, dimCoda);
-        //metti in coda : richieste
-        //tutti i file sono in coda
-        // => attiva stato di uscita
         CHECK_EQ((waitpid(pid, NULL, 0)), -1, "waitpid: ")
     }
 

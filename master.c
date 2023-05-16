@@ -1,4 +1,5 @@
-#define _POSIX_C_SOURCE  200112L
+//#define _POSIX_C_SOURCE  200112L
+#define _POSIX_C_SOURCE 200809
 
 #include <signal.h>
 #include <pthread.h>
