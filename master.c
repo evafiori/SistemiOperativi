@@ -57,7 +57,6 @@ void* gestoreSegnali(void* mask){
                 pthread_exit(NULL);
             case SIGUSR1:
                 stampaFlag = 1;
-                //prendere direttamente la lock sulla socket e mandare messaggio di stampa
                 break;
             // ignoro SIGPIPE per evitare di essere terminato da una scrittura su un socket
             //quindi SIGPIPE non fa parte della maschera

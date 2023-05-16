@@ -13,7 +13,7 @@ typedef treeNode_t* treeNodePtr_t;
 
 int inserisciNodo (msg_t* temp);
 
-void stampaAlbero();
+void stampaAlbero(treeNodePtr_t scorri);
 
 void deallocaAlbero (treeNodePtr_t* a);
 void dealloca();

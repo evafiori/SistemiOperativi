@@ -79,7 +79,7 @@ void *worker_thread(void *threadpool) {
     BQueue_t *pool = (BQueue_t *)threadpool; // cast
     char* path = NULL;
     long ris;
-    size_t msgDim;
+    int msgDim;
     int w;
 
     LOCK(pool->m)
@@ -94,6 +94,7 @@ void *worker_thread(void *threadpool) {
             // devo uscire e non ci sono task in coda
             //è stata fatta una broadcast dal master (o dal signal handler)
             SIGNAL(pool->cfull)
+            BROADCAST(pool->cempty)
             UNLOCK(pool->m)
             return NULL; //pthread exit
         }
@@ -104,6 +105,7 @@ void *worker_thread(void *threadpool) {
         //faccio la signal al master 
         SIGNAL(pool->cfull)
 
+
         UNLOCK(pool->m)
 
         // eseguo la funzione 
@@ -112,24 +114,20 @@ void *worker_thread(void *threadpool) {
         // invio il risultato
         //scrittura sulla socket
 
-        CHECK_EQ((msgDim = myStrnlen(path, PATHNAME_MAX_DIM)), -1, "myStrnlen")
+        CHECK_EQ((msgDim = (int)myStrnlen(path, PATHNAME_MAX_DIM)), -1, "myStrnlen")
         msgDim++; //'\0'
+        fprintf(stderr, "strnlen msgDim %d. sto per scriveeeertiiii\n", msgDim);
 
         LOCK(mtxSocket)
 
-        do{
-            CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(size_t))), -1, "writen msgDim")
-        }while(w == 1);
-        do{
-            CHECK_EQ((w = writen(socketClient, path, msgDim)), -1, "writen path")
-        }while(w == 1);
-        do{
-            CHECK_EQ((w = writen(socketClient, &ris, sizeof(long))), -1, "writen long")
-        }while(w == 1);
-
+        CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen msgDim")
+        
+        CHECK_EQ((w = writen(socketClient, path, msgDim)), -1, "writen path")
+        
+        CHECK_EQ((w = writen(socketClient, &ris, sizeof(long))), -1, "writen long")
+        
         UNLOCK(mtxSocket)
         
-
         //free(path);
         path = NULL;
 
@@ -199,7 +197,7 @@ void destroyThreadPool() {
         return ;
     }
 
-    //la lock mi serve solo per accedere alla condition variable
+    /*la faccio nel master
     LOCK(pool->m)
 
     //c è la cond sui cui mi restano in attesa i worker (thread)
@@ -211,7 +209,10 @@ void destroyThreadPool() {
     }
 
     UNLOCK(pool->m)
-
+    */
+    //la lock mi serve solo per accedere alla condition variable
+    
+    /*lo faccio nel master, ma se ho una exit devo gestirlo
     for(int i = 0; i < pool->numthreads; i++) {
         if (pthread_join(pool->threads[i], NULL) != 0) {
             errno = EFAULT;
@@ -220,6 +221,7 @@ void destroyThreadPool() {
         }
         fprintf(stderr, "joinato thread %d\n", i);
     }
+    */
 
     if(freePoolResources(pool) == -1){
         perror("freePoolResources");

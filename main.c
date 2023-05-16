@@ -1,10 +1,8 @@
 #define _POSIX_C_SOURCE 200809
 
-// #define _POSIX_C_SOURCE 200112L //necessaria intanto per fare la getopt
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
-//#include <getopt.h> //anche se la getopt è definita in unistd.h
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -17,7 +15,6 @@
 #include "list.h"
 
 #define HELP fprintf(stderr, "Usage: %s <fileBinario> [<fileBinario> [<fileBinario>]] [-n <nthread>] [-q <qlen>] [-d <directory-name>] [-t <delay>]\n", argv[0]);
-//trad > 0 controlla anche != -1
 #define NUMBER_OPTION(x, str) trad = isNumber(optarg); if(trad != -1) { if(trad > 0) { x = trad; } else { fprintf(stderr, "Argomento opzione minore o uguale a zero non valido.\n"); exit(EXIT_FAILURE); } } else { perror(str); exit(EXIT_FAILURE); }
 #define SETTED_OPTION(c) fprintf(stderr, "Opzione %c già settata\n", c); 
 
@@ -30,7 +27,10 @@ extern pthread_t idGestoreSegnali;
 extern int socketClient;
 extern int fdc;
 
+extern pthread_mutex_t mtxSocket;
+
 extern BQueue_t *pool;
+extern treeNodePtr_t albero;
 
 lPtr fileBinari = NULL;
 
@@ -202,7 +202,7 @@ int main(int argc, char * argv[]){
         
         leggi();
         
-        stampaAlbero();
+        stampaAlbero(albero);
     }
     else{
         //padre -> masterWoker
@@ -223,7 +223,7 @@ int main(int argc, char * argv[]){
         //provo la socket 
         
         int i = 1;
-        size_t msgDim;
+        int msgDim;
         int w;
         while(terminaCodaFlag != 1 && i < argc){
             //delay
@@ -236,12 +236,12 @@ int main(int argc, char * argv[]){
             }
             
             if(terminaCodaFlag != 1){
-                CHECK_EQ(push(pool, argv[i]), -1, "pop")
-                SIGNAL(pool->cempty)
+                CHECK_EQ(push(pool, argv[i]), -1, "push")
+                //SIGNAL(pool->cempty) //dovrebbe diventare una broadcast?
             }
 
+            SIGNAL(pool->cempty)
             UNLOCK(pool->m)
-
             
             /*
             CHECK_EQ((msgDim = myStrnlen(argv[i], PATHNAME_MAX_DIM)), -1, "myStrnlen")
@@ -266,11 +266,24 @@ int main(int argc, char * argv[]){
 
         UNLOCK(pool->m)
 
+        //join prima del messaggio di errore
+        for(int i = 0; i < pool->numthreads; i++){
+            if (pthread_join(pool->threads[i], NULL) != 0) {
+                errno = EFAULT;
+                perror("destryThreadPool");
+                //non posso andarmene così, lascerei il collector penzolone
+                exit(EXIT_FAILURE);
+            }
+            fprintf(stderr, "joinato thread %d\n", i);
+        }
+
         msgDim = -1;
-        
-        do{
-            CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen termine")
-        }while(w == 1);
+
+        LOCK(mtxSocket)
+
+        CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen termine")
+
+        UNLOCK(mtxSocket)
 
         //prova gestore segnali
         //while (terminaCodaFlag != 1);

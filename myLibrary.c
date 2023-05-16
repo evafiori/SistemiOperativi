@@ -93,7 +93,7 @@ int myStrncat(char* s1, char* s2, size_t max){
 */
 int readn (int fd, void* buf, size_t n){
 	size_t  nleft = n, nread;
-	char* bufbuf = buf;
+	void* bufbuf = (char*)buf;
 	while(nleft > 0){
 		if((nread = read(fd, bufbuf, nleft)) == -1 && errno != EINTR) {
 			return -1;
@@ -107,6 +107,27 @@ int readn (int fd, void* buf, size_t n){
 	return 1;
 }
 
+// -1 => errore, errno settato. 
+//  0 => okay
+int writen (int fd, void* buf, size_t n){
+	size_t   nleft = n, nwrite = 0;
+	void* bufbuf = (char*)buf;
+    //fprintf(stderr, "buf: %s\tbufbuf: %s\n", (char*)buf, bufbuf);
+   	while (nleft > 0) {
+   		if((nwrite = write(fd, bufbuf, nleft)) == -1 && errno != EINTR) {
+	   		//if(nleft == n){
+				return -1;
+			//}
+			//else{
+			//	return n - nleft;
+			//}
+   		}
+   		nleft -= nwrite;
+   		bufbuf   += nwrite;
+   	}
+   	return 0; //(n - nleft);
+}
+
 //AGGIUSTARE
 //write safe alle interruzioni
 /*ritorna 
@@ -117,6 +138,7 @@ int readn (int fd, void* buf, size_t n){
     1: nessun byte scritto
 */
 // -1 => errore, errno settato. 1 => nessun byte scritto. 0 => okay
+/*
 int writen (int fd, void* buf, size_t n){
 	size_t   nleft = n, nwrite;
 	char* bufbuf = (char*)buf;
@@ -138,6 +160,7 @@ int writen (int fd, void* buf, size_t n){
    	}
    	return 0; //(n - nleft);
 }
+*/
 
 int myConnect(int sockfd, const struct sockaddr *addr, socklen_t addrlen){
     struct timespec request;

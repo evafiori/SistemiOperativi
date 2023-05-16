@@ -71,21 +71,29 @@ void creaSocketServer(){
 }
 
 void leggi(){
-	size_t msgDim;
+	int msgDim;
     long r = 0;
     //char buffer[PATHNAME_MAX_DIM];
     char* buffer = NULL;
     msg_t* nodino = NULL;
 
-    do{
-        CHECK_NULL((nodino = malloc(sizeof(msg_t))), "malloc")
+    //msgDim = 10;
+    //fprintf(stderr, "lETTO msgDim %ld\n", msgDim);
+    //CHECK_NULL((buffer = malloc( msgDim)), "malloc buffer") //sizeof(char) *
+    //fprintf(stderr, "allocato  %ld in %s\n", msgDim, buffer);
+    //free(buffer);
 
-        CHECK_EQ((readn(fdc, &msgDim, sizeof(size_t))), -1, "readn1")
+    do{
+        CHECK_NULL((nodino = malloc(sizeof(msg_t))), "malloc nodino")
+
+        CHECK_EQ((readn(fdc, &msgDim, sizeof(int))), -1, "readn1")
+        fprintf(stderr, "lETTO msgDim %d\n", msgDim);
+
         if(msgDim > 0){
-            CHECK_NULL((buffer = malloc(sizeof(char)*msgDim)), "malloc")
+            CHECK_NULL((buffer = malloc( msgDim)), "malloc buffer") //sizeof(char) *
             CHECK_EQ((readn(fdc, buffer, msgDim)), -1, "readn2")
 
-            CHECK_NULL((nodino->filePath = malloc(sizeof(char)*msgDim)), "malloc")
+            CHECK_NULL((nodino->filePath = malloc(sizeof(char)*msgDim)), "malloc nodinoPath")
             strncpy(nodino->filePath, buffer, msgDim);
             free(buffer);
             buffer = NULL;
@@ -96,7 +104,7 @@ void leggi(){
             nodino->result = r;
             CHECK_EQ(inserisciNodo(nodino), -1, "inserisciNodo")
 
-            fprintf(stderr, "%ld\t%s\t%ld\n", msgDim, buffer, r);
+            fprintf(stderr, "%d\t%s\t%ld\n", msgDim, buffer, r);
         }
     }while(msgDim != -1);
 }

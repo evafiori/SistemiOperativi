@@ -63,9 +63,9 @@ int inserisciNodo (msg_t* temp){
 }
 
 //stampa tutto l'albero in maniera ordinata e già formattata
-void stampaAlbero(){
+void stampaAlbero(treeNodePtr_t scorri){
     printf("stampa albero\n");
-    treeNodePtr_t scorri = albero;
+    //treeNodePtr_t scorri = albero;
     if(scorri != NULL){
         stampaAlbero(scorri->sx);
         printf("%ld\t%s\n", scorri->msg->result, scorri->msg->filePath);
