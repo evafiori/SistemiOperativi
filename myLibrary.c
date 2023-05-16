@@ -54,8 +54,8 @@ int verificaReg(char* pathname){
 
 
 //ritorna la lunghezza se va a buon fine, -1 e setta errno altrimenti
-int myStrnlen(char* str, size_t max){
-    int l = strnlen(str, max);
+size_t myStrnlen(char* str, size_t max){
+    size_t l = strnlen(str, max);
     if(l == max){ //non accetto mai dimensione di 256, massimo 255 e lascio spazio al terminatore di stringa
         errno = ERANGE;
         return -1;

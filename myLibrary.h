@@ -43,7 +43,7 @@ int verificaReg(char* pathname);
 int verificaDir(char* pathname);
 
 size_t strnlen(const char *s, size_t maxlen);
-int myStrnlen(char* str, size_t max);
+size_t myStrnlen(char* str, size_t max);
 int myStrncat(char* s1, char* s2, size_t max); //se non la usi toglila
 
 int readn (int fd, void* buf, size_t n);

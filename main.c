@@ -22,7 +22,8 @@
 #define SETTED_OPTION(c) fprintf(stderr, "Opzione %c già settata\n", c); 
 
 extern int terminaCodaFlag;
-extern int stampaFlag;
+extern int terminaGestoreFlag;
+extern int stampaFlag; //non mi serve se è direttamente il gestore a scrivere sulla socket
 
 extern pthread_t idGestoreSegnali; 
 
@@ -76,7 +77,7 @@ int main(int argc, char * argv[]){
                 fprintf(stderr, "File %s non regolare.\n", argv[optind]);
             }
             optind++;
-            fprintf(stderr, "%d\n", optind);
+            //fprintf(stderr, "%d\n", optind);
 
         }
         else{
@@ -137,7 +138,7 @@ int main(int argc, char * argv[]){
             }
         }
     }
-    fprintf(stderr, "Worker: %d\tCoda: %d\tDirectory: %s\tDelay: %d\n", nWorker, dimCoda, dir, delay);
+    //fprintf(stderr, "Worker: %d\tCoda: %d\tDirectory: %s\tDelay: %d\n", nWorker, dimCoda, dir, delay);
     
     //adesso devo controllare di aver ricevuto qualche file in input:
     //se scannerizzo la directory dopo aver lanciato i thread controllo anche se è stata passata una dir da scan
@@ -148,7 +149,7 @@ int main(int argc, char * argv[]){
     }
 
     //verifico e va
-    stampaLista(fileBinari);
+    //stampaLista(fileBinari);
 
     /*
     for(int i = 0; i < lenFileReg; i++){
@@ -184,6 +185,7 @@ int main(int argc, char * argv[]){
         ATEXIT(dealloca)
 
         //provo la socket
+        /*
         int msgDim;
         long r = 0;
         char buffer[PATHNAME_MAX_DIM];
@@ -196,6 +198,9 @@ int main(int argc, char * argv[]){
                 fprintf(stderr, "%d\t%s\t%ld\n", msgDim, buffer, r);
             }
         }while(msgDim >= 0);
+        */
+        
+        leggi();
         
         stampaAlbero();
     }
@@ -214,19 +219,14 @@ int main(int argc, char * argv[]){
 
         creaSocketClient();
         fprintf(stderr, "Fine crea socket client\n");
-
-        //prova gestore segnali
-        while (terminaCodaFlag != 1);
-        CHECK_NEQ((errno = pthread_join(idGestoreSegnali, NULL)), 0, "join gestore segnali") 
-        fprintf(stderr, "La join è stata eseguita\n");
         
         //provo la socket 
         
         int i = 1;
-        int msgDim;
+        size_t msgDim;
         int w;
         while(terminaCodaFlag != 1 && i < argc){
-            
+            //delay
 
             LOCK(pool->m)
 
@@ -259,13 +259,6 @@ int main(int argc, char * argv[]){
             i++;
         }
 
-        /*if(i == argc && terminaCodaFlag != 1){
-            //terminaCodaFlag = 1; //dovrebbe farlo il signal handler
-            fprintf(stderr, "id gestore segnali: %ld\n", idGestoreSegnali);
-            CHECK_NEQ((errno = pthread_kill(idGestoreSegnali, SIGTERM)), 0, "pthread_kill") //sigterm è gestito: aziona terminaCoda e fa exit()
-            fprintf(stderr, "La kill e' stata eseguita\n");
-        }*/
-
         LOCK(pool->m)
 
         terminaCodaFlag = 1;//da mettere se commentato if sopra
@@ -279,7 +272,18 @@ int main(int argc, char * argv[]){
             CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen termine")
         }while(w == 1);
 
+        //prova gestore segnali
+        //while (terminaCodaFlag != 1);
+
         CHECK_EQ((waitpid(pid, NULL, 0)), -1, "waitpid: ")
+
+        if(terminaGestoreFlag == 0){
+            fprintf(stderr, "id gestore segnali: %ld\n", idGestoreSegnali);
+            CHECK_NEQ((errno = pthread_kill(idGestoreSegnali, SIGTERM)), 0, "pthread_kill") //sigterm è gestito: aziona terminaCoda e fa exit()
+            fprintf(stderr, "La kill e' stata eseguita\n");
+        }
+        CHECK_NEQ((errno = pthread_join(idGestoreSegnali, NULL)), 0, "join gestore segnali") 
+        fprintf(stderr, "La join è stata eseguita\n");
     }
 
     return 0;

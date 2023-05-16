@@ -10,7 +10,6 @@ treeNodePtr_t albero = NULL;
 typedef struct messaggio{
     long result;
     char* filePath;
-    int pathDim;
 }msg_t;
 
 typedef struct nodo{

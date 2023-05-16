@@ -79,7 +79,7 @@ void *worker_thread(void *threadpool) {
     BQueue_t *pool = (BQueue_t *)threadpool; // cast
     char* path = NULL;
     long ris;
-    int msgDim;
+    size_t msgDim;
     int w;
 
     LOCK(pool->m)
@@ -118,13 +118,13 @@ void *worker_thread(void *threadpool) {
         LOCK(mtxSocket)
 
         do{
-            CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen")
+            CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(size_t))), -1, "writen msgDim")
         }while(w == 1);
         do{
-            CHECK_EQ((w = writen(socketClient, path, msgDim)), -1, "writen")
+            CHECK_EQ((w = writen(socketClient, path, msgDim)), -1, "writen path")
         }while(w == 1);
         do{
-            CHECK_EQ((w = writen(socketClient, &ris, sizeof(long))), -1, "writen")
+            CHECK_EQ((w = writen(socketClient, &ris, sizeof(long))), -1, "writen long")
         }while(w == 1);
 
         UNLOCK(mtxSocket)

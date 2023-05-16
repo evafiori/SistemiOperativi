@@ -18,6 +18,7 @@
 sigset_t mask;
 
 int terminaCodaFlag = 0;
+int terminaGestoreFlag = 0;
 int stampaFlag = 0;
 
 pthread_t idGestoreSegnali = -1;
@@ -51,6 +52,7 @@ void* gestoreSegnali(void* mask){
             case SIGQUIT:
             case SIGTERM:
                 terminaCodaFlag = 1;
+                terminaGestoreFlag = 1;
                 fprintf(stderr, "gestore\n");
                 pthread_exit(NULL);
             case SIGUSR1:

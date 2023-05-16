@@ -70,6 +70,37 @@ void creaSocketServer(){
     printf("conn accettata e chiusura in atexit\n");
 }
 
+void leggi(){
+	size_t msgDim;
+    long r = 0;
+    //char buffer[PATHNAME_MAX_DIM];
+    char* buffer = NULL;
+    msg_t* nodino = NULL;
+
+    do{
+        CHECK_NULL((nodino = malloc(sizeof(msg_t))), "malloc")
+
+        CHECK_EQ((readn(fdc, &msgDim, sizeof(size_t))), -1, "readn1")
+        if(msgDim > 0){
+            CHECK_NULL((buffer = malloc(sizeof(char)*msgDim)), "malloc")
+            CHECK_EQ((readn(fdc, buffer, msgDim)), -1, "readn2")
+
+            CHECK_NULL((nodino->filePath = malloc(sizeof(char)*msgDim)), "malloc")
+            strncpy(nodino->filePath, buffer, msgDim);
+            free(buffer);
+            buffer = NULL;
+
+            //potrei gestire l'errore deallocando la malloc del nodino sopra
+            CHECK_EQ((readn(fdc, &r, sizeof(long))), -1, "readn3")
+
+            nodino->result = r;
+            CHECK_EQ(inserisciNodo(nodino), -1, "inserisciNodo")
+
+            fprintf(stderr, "%ld\t%s\t%ld\n", msgDim, buffer, r);
+        }
+    }while(msgDim != -1);
+}
+
 /*
 int main(int argc, char* argv[]){
     ignoraSegnali();

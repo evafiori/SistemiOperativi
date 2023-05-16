@@ -15,7 +15,7 @@ typedef struct list{
 //riceve come parametri il puntatore alla testa e il filename da inserire
 //restituisce il puntatore alla nuova testa
 lPtr inserisciTesta (lPtr e, char* f){
-    int lung = myStrnlen(f, PATHNAME_MAX_DIM);
+    size_t lung = myStrnlen(f, PATHNAME_MAX_DIM);
     if(lung == -1){
         perror("Dimensione pathname non valida: ");
         return e;
@@ -24,7 +24,7 @@ lPtr inserisciTesta (lPtr e, char* f){
     CHECK_NULL(temp, "malloc")
     CHECK_NULL((temp->file = malloc(sizeof(char)*(lung+1))), "malloc") //+1 per il terminatore di stringa
     strncpy(temp->file, f, lung);
-    
+
     temp->next = e;
     return temp;
 }

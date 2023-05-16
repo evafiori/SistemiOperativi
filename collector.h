@@ -6,3 +6,5 @@ void chiudiSocketServer();
 void cancellaFileSocket();
 void chiudiConnessione();
 void creaSocketServer();
+
+void leggi();
