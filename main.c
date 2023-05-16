@@ -33,6 +33,8 @@ extern BQueue_t *pool;
 
 lPtr fileBinari = NULL;
 
+extern sigset_t mask;
+
 int pthread_kill(pthread_t thread, int sig); //altrimenti warning
 
 void svuotaFileBinari();
@@ -160,7 +162,7 @@ int main(int argc, char * argv[]){
     }
     */
     
-    //prova gestore segnali NON QUI
+    //prova gestore segnali
     /*
         while (terminaCodaFlag != 1);
     */
@@ -168,13 +170,13 @@ int main(int argc, char * argv[]){
     //prova segnali: funziona
     //while(terminaCodaFlag == 0);
 
-    
+    //gestione segnali
+    mascheraSegnali();
+
     CHECK_EQ((pid = fork()), -1, "Fork")
     if(pid == 0){
         //figlio -> collector
         fprintf(stderr, "Sono il collector\n");
-
-        //ignoraSegnali();
 
         creaSocketServer();
         fprintf(stderr, "Fine crea socket server\n");
@@ -201,17 +203,23 @@ int main(int argc, char * argv[]){
         //padre -> masterWoker
         fprintf(stderr, "Sono il master\n");
 
-        //gestione segnali
-        mascheraSegnali();
-
-        //manca la creazione threadpool
-
+        //creo thread gestore dei segnali
+        CHECK_NEQ((errno = pthread_create(&idGestoreSegnali, NULL, gestoreSegnali, (void*) &mask)), 0, "Thread create: ")
+        //IL THREAD È CREATO QUANDO LO DECIDE IL SO
         
+        //ATEXIT(killGestoreSegnali)
+
+        //creazione threadpool
         CHECK_EQ(createThreadPool (nWorker, dimCoda), -1, "Creazione threadpool") 
 
         creaSocketClient();
         fprintf(stderr, "Fine crea socket client\n");
 
+        //prova gestore segnali
+        while (terminaCodaFlag != 1);
+        CHECK_NEQ((errno = pthread_join(idGestoreSegnali, NULL)), 0, "join gestore segnali") 
+        fprintf(stderr, "La join è stata eseguita\n");
+        
         //provo la socket 
         
         int i = 1;
@@ -268,11 +276,8 @@ int main(int argc, char * argv[]){
         msgDim = -1;
         
         do{
-            CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen")
+            CHECK_EQ((w = writen(socketClient, &msgDim, sizeof(int))), -1, "writen termine")
         }while(w == 1);
-        
-        //CHECK_NEQ((errno = pthread_join(idGestoreSegnali, NULL)), 0, "join gestore segnali") 
-        //fprintf(stderr, "La join è stata eseguita\n");
 
         CHECK_EQ((waitpid(pid, NULL, 0)), -1, "waitpid: ")
     }

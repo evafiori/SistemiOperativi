@@ -17,6 +17,7 @@
 int socketServer;
 int fdc;
 
+/* li ignoro con la maschera prima della fork
 //ignora tutti i segnali
 void ignoraSegnali(){
 	struct sigaction sa;
@@ -29,6 +30,7 @@ void ignoraSegnali(){
     CHECK_EQ(sigaction(SIGPIPE,&sa, NULL), -1, "Sigaction SIGPIPE: ")
     CHECK_EQ(sigaction(SIGUSR1,&sa, NULL), -1, "Sigaction SIGUSR1: ")
 }
+*/
 
 //chiude collegamento tramite filedescriptor
 void chiudiSocketServer(){

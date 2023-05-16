@@ -15,6 +15,8 @@
 
 #define SOCKNAME "./farm.sck"
 
+sigset_t mask;
+
 int terminaCodaFlag = 0;
 int stampaFlag = 0;
 
@@ -57,7 +59,7 @@ void* gestoreSegnali(void* mask){
                 break;
             // ignoro SIGPIPE per evitare di essere terminato da una scrittura su un socket
             //quindi SIGPIPE non fa parte della maschera
-            
+            default: ;
         }
     }
     //pthread_exit(NULL); //dovrò killarlo in uscita, serve gestire continuamente i segnali
@@ -68,7 +70,6 @@ void* gestoreSegnali(void* mask){
 
 //maschera i segnali a tutti i thread e chiama un thread gestore apposta
 void mascheraSegnali(){
-    sigset_t mask;
     struct sigaction s;
 
     memset(&s, 0, sizeof(s)); 
@@ -87,13 +88,15 @@ void mascheraSegnali(){
     //blocco segnali della maschera a tutti gli altri thread
     CHECK_NEQ((errno = pthread_sigmask(SIG_BLOCK, &mask, NULL)), 0, "pthread_sigmask: ")
     
-    //creo thread gestore dei segnali
-    CHECK_NEQ((errno = pthread_create(&idGestoreSegnali, NULL, gestoreSegnali, (void*) &mask)), 0, "Thread create: ")
-    //IL THREAD È CREATO QUANDO LO DECIDE IL SO
-    
-    //ATEXIT(killGestoreSegnali)
 }
-
+/*
+Bloccare è diverso da ignorare. Ignori un segnale installando SIG_IGNcon sigaction().
+Dopo che un segnale è stato generato dal kernel o da un processo, il kernel lo rende in attesa di alcuni processi. Si dice che il segnale sia consegnato a un processo una volta che il processo agisce sul segnale. Un processo può bloccare un segnale, che lascia il segnale in sospeso fino a quando non viene sbloccato. Un segnale non bloccato verrà inviato immediatamente. La maschera del segnale specifica quali segnali sono bloccati. Un processo può determinare quali segnali sono in attesa.
+La maggior parte degli UNIX non metterà in coda più istanze dello stesso segnale in attesa; solo un'istanza di ciascun segnale può essere in sospeso.
+L'impostazione di un'azione del segnale su SIG_IGNper un segnale in attesa causerà l'eliminazione del segnale in attesa, indipendentemente dal fatto che sia bloccato o meno.
+E la maschera del segnale di processo contiene l'insieme di segnali che sono attualmente bloccati.
+Quando un processo blocca un segnale, un'occorrenza del segnale viene mantenuta fino a quando il segnale non viene sbloccato (i segnali bloccati non vengono persi, mentre i segnali ignorati vengono persi).
+*/
 
 void chiudiSocketClient(){
     LOCK(mtxSocket)
